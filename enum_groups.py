@@ -2,7 +2,8 @@
 """
 Author: Sean Hanrahan
 shanrahan@vmware.com
-script to enumerate all groups by name assigned to apps
+Workspace ONE Access script to enumerate all Groups assigned to apps
+First iterates through all apps, determines what groups are assigned to each, and then gets the group details
 """
 
 import requests
