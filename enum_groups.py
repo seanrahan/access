@@ -14,11 +14,10 @@ from oauthlib.oauth2 import BackendApplicationClient
 
 ##--- START DATA TO CHANGE ---##
 # define auth (uses bearer / access token)
-tenant = 'shanrahan.vidmpreview.com' 
+tenant = 'shanrahan.vidmpreview.com'
 clientId = 'python'
 sharedSecret = ''
 ##--- END ---##
-
 
 #API URL initilization
 token_url = 'https://' + tenant + '/SAAS/auth/oauthtoken'
@@ -47,10 +46,9 @@ payload_getCatalogItems = {
     "categories": []
 }
 
-
-
-#variable to capture group names
+#variables to capture group names, track item count
 groupNames = []
+itemNum = 0
 
 ### SETUP DONE ###
 
@@ -67,58 +65,67 @@ token = session.fetch_token(token_url=token_url,client_id=id,client_secret=share
 try:
     # STEP 1 - Get All Catalog Items
     # enumerate apps in the OG and below
-    catalogItemsReq = session.post(getCatalogItems, headers=headers_catItems, data=json.dumps(payload_getCatalogItems))
-    catalogItemsReq.raise_for_status()
     
-    # check for app list returned
-    if (catalogItemsReq.status_code == 204):
-        print("EMPTY response")
-        exit(1)
+    # main while loop to iterate through result sets
+    while(True):
 
-    # parse json response
-    catalogItems = catalogItemsReq.json()
+        catalogItemsReq = session.post(getCatalogItems, headers=headers_catItems, data=json.dumps(payload_getCatalogItems))
+        catalogItemsReq.raise_for_status()
 
-    #STEP 2 - Get Catalog items detail
-    # iterate through catalog items in request
-    for catItem in catalogItems['items']:
-        catUrl = getCatalogDetail + catItem['uuid']
+        # parse json response
+        catalogItems = catalogItemsReq.json()
 
-        #get detail for each catalog item
-        catalogDetailReq = session.get(catUrl, headers=headers_catDetail)
-        catalogDetailReq.raise_for_status()
+        # if first iteration, print total expected items
+        if itemNum == 0:
+            print("Total catalog items: ", catalogItems['totalSize'])
+            totalNum = catalogItems['totalSize']
 
-        # check for catalog details returned, if empty go to next
-        if (catalogDetailReq.status_code == 204):
-            print("EMPTY catalog item detail response, moving to next")
-            continue
 
-        # parse JSON response
-        catalogDetail = catalogDetailReq.json()
+        #STEP 2 - Get Catalog items detail
+        # iterate through catalog items in request
+        for catItem in catalogItems['items']:
+            catUrl = getCatalogDetail + catItem['uuid']
 
-        #STEP 3 - Get group detail from each catalog item
-        #iterate through groups in request
-        for group in catalogDetail['items']:
             #get detail for each catalog item
-            grpUrl = getGroupDetail + '&ids=' + group['subjectId']
-            groupDetailReq = session.get(grpUrl, headers=headers_groupDetail)
-            groupDetailReq.raise_for_status()
-
-            # check for catalog details returned, if no groups go to next
-            if (groupDetailReq.status_code == 204):
-                print("EMPTY group detail response, moving to next")
-                continue
+            catalogDetailReq = session.get(catUrl, headers=headers_catDetail)
+            catalogDetailReq.raise_for_status()
 
             # parse JSON response
-            groupDetail = groupDetailReq.json()
+            catalogDetail = catalogDetailReq.json()
 
-            #append to variable / array
-            groupNames.append(groupDetail['items'][0]['name'])
+            # increment catalog item count, provide feedback to user
+            itemNum += 1
+            print("Processing ", itemNum, '/',totalNum, ': ' , catItem['name'])
 
+            #STEP 3 - Get group detail from each catalog item
+            #iterate through groups in request
+            for group in catalogDetail['items']:
+                #get detail for each catalog item, skip anything that comes back not in a group
+                if (group['subjectType'] != 'GROUPS'):
+                    continue
+                grpUrl = getGroupDetail + '&ids=' + group['subjectId']
+                groupDetailReq = session.get(grpUrl, headers=headers_groupDetail)
+                groupDetailReq.raise_for_status()
+
+                # parse JSON response
+                groupDetail = groupDetailReq.json()
+
+                #append to variable / array
+                groupNames.append(groupDetail['items'][0]['name'])
+        
+        #if this is the end of this result-set, iterate to next result-set, otherwise break out of main while loop
+        if 'next' in catalogItems['_links']:
+            # print('end of current result-set, fetching next')
+            getCatalogItems = 'https://' + tenant + catalogItems['_links']['next']['href']
+        else:
+            break
 
 except HTTPError as http_err:
     print(f'HTTP Error: {http_err}')
 except Exception as err:
     print(f'Other error: {err}')
+
+print("Complete!")
 
 # sort & dedupe array
 result = [] 
@@ -129,4 +136,6 @@ for i in groupNames:
 result.sort()
 
 # print result
-print('***Unique Groups that are assigned to Catalog Items***\n', result)
+print('\n******************************************************\n***Unique Groups that are assigned to Catalog Items***\n******************************************************\n')
+for item in result:
+    print(item)
