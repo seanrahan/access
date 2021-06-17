@@ -52,8 +52,7 @@ token = session.fetch_token(token_url=token_url,client_id=id,client_secret=share
 
 # Logic
 # 1. get all catalog items
-# 2. for each catalog item, get all groups
-# 3. for each group get names
+# 2. print type / name for each
 
 try:
     # Get All Catalog Items
